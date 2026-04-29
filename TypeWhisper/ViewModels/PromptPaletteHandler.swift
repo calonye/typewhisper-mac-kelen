@@ -55,7 +55,8 @@ final class PromptPaletteHandler {
         self.workflowTextProcessingService = workflowTextProcessingService
             ?? WorkflowTextProcessingService(
                 promptProcessingService: promptProcessingService,
-                translationService: nil
+                translationService: nil,
+                workflowService: workflowService
             )
         self.soundService = soundService
         self.accessibilityAnnouncementService = accessibilityAnnouncementService

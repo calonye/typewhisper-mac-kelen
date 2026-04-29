@@ -55,6 +55,7 @@ class PromptProcessingService: ObservableObject {
     }
 
     weak var memoryService: (any MemoryRetrieving)?
+    weak var modelManagerService: ModelManagerService?
     private var appleIntelligenceProvider: LLMProvider?
     private var cancellables = Set<AnyCancellable>()
     var processActivityManager: any ProcessActivityManaging = DefaultProcessActivityManager()
@@ -231,6 +232,7 @@ class PromptProcessingService: ObservableObject {
         guard let plugin = PluginManager.shared.llmProvider(for: effectiveId) else {
             throw LLMError.noProviderConfigured
         }
+        await restoreLocalProviderIfNeeded(plugin)
         guard plugin.isAvailable else {
             if let setupStatus = plugin as? any LLMProviderSetupStatusProviding,
                !setupStatus.requiresExternalCredentials {
@@ -248,6 +250,13 @@ class PromptProcessingService: ObservableObject {
             requestedModel: requestedModel?.isEmpty == false ? requestedModel : nil,
             persistGlobalSelection: false
         )
+        let shouldAutoUnloadAfterProcessing = Self.requiresProcessActivityBudget(for: plugin)
+        defer {
+            if shouldAutoUnloadAfterProcessing {
+                modelManagerService?.scheduleAutoUnloadIfNeeded(for: plugin)
+            }
+        }
+
         logger.info("Processing prompt with plugin \(effectiveId)")
         let providerStart = ContinuousClock.now
         do {
@@ -291,6 +300,26 @@ class PromptProcessingService: ObservableObject {
             userText: text,
             model: model
         )
+    }
+
+    private func restoreLocalProviderIfNeeded(_ plugin: any LLMProviderPlugin) async {
+        guard Self.requiresProcessActivityBudget(for: plugin),
+              !plugin.isAvailable,
+              let nsPlugin = plugin as? NSObject else { return }
+
+        let selector = NSSelectorFromString("triggerRestoreModel")
+        guard nsPlugin.responds(to: selector) else { return }
+
+        nsPlugin.perform(selector)
+        for _ in 0..<300 {
+            try? await Task.sleep(for: .milliseconds(100))
+            if plugin.isAvailable { return }
+
+            if let activityReporter = plugin as? any PluginSettingsActivityReporting {
+                guard let activity = activityReporter.currentSettingsActivity,
+                      !activity.isError else { return }
+            }
+        }
     }
 
     private func withProcessActivityIfNeeded<T>(

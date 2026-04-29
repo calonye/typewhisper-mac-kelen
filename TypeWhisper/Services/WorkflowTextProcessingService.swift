@@ -22,19 +22,26 @@ struct WorkflowTextProcessingService {
         _ targetLanguageCode: String,
         _ sourceLanguageCode: String?
     ) async throws -> String
+    typealias LLMSelectionProvider = (_ workflow: Workflow) -> (providerId: String?, cloudModel: String?)
 
     private let promptProcessor: PromptProcessor
     private let appleTranslator: AppleTranslator?
+    private let llmSelectionProvider: LLMSelectionProvider
 
     init(
         promptProcessor: @escaping PromptProcessor,
-        appleTranslator: AppleTranslator?
+        appleTranslator: AppleTranslator?,
+        llmSelectionProvider: @escaping LLMSelectionProvider = { workflow in
+            let behavior = workflow.behavior
+            return (behavior.providerId, behavior.cloudModel)
+        }
     ) {
         self.promptProcessor = promptProcessor
         self.appleTranslator = appleTranslator
+        self.llmSelectionProvider = llmSelectionProvider
     }
 
-    init(promptProcessingService: PromptProcessingService, translationService: AnyObject?) {
+    init(promptProcessingService: PromptProcessingService, translationService: AnyObject?, workflowService: WorkflowService? = nil) {
         self.promptProcessor = { prompt, text, providerId, cloudModel, temperatureDirective in
             try await promptProcessingService.process(
                 prompt: prompt,
@@ -44,6 +51,17 @@ struct WorkflowTextProcessingService {
                 temperatureDirective: temperatureDirective,
                 skipMemoryInjection: true
             )
+        }
+        self.llmSelectionProvider = { workflow in
+            if let workflowService {
+                return (
+                    workflowService.llmProviderId(for: workflow),
+                    workflowService.llmCloudModel(for: workflow)
+                )
+            }
+
+            let behavior = workflow.behavior
+            return (behavior.providerId, behavior.cloudModel)
         }
 
         #if canImport(Translation)
@@ -91,11 +109,12 @@ struct WorkflowTextProcessingService {
         }
 
         let behavior = workflow.behavior
+        let selection = llmSelectionProvider(workflow)
         return try await promptProcessor(
             systemPrompt,
             text,
-            behavior.providerId,
-            behavior.cloudModel,
+            selection.providerId,
+            selection.cloudModel,
             behavior.temperatureDirective
         )
     }

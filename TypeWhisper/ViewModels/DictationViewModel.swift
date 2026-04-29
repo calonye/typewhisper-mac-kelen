@@ -258,7 +258,8 @@ final class DictationViewModel: ObservableObject {
         self.workflowTextProcessingService = workflowTextProcessingService
             ?? WorkflowTextProcessingService(
                 promptProcessingService: promptProcessingService,
-                translationService: translationService
+                translationService: translationService,
+                workflowService: workflowService
             )
         self.speechFeedbackService = speechFeedbackService
         self.accessibilityAnnouncementService = accessibilityAnnouncementService
