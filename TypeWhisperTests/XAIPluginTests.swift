@@ -85,7 +85,7 @@ final class XAIPluginTests: XCTestCase {
     }
 
     func testXAIManifestDeclaresCloudAPIKeyPlugin() throws {
-        let manifestURL = TestSupport.repoRoot.appendingPathComponent("Plugins/XAIPlugin/manifest.json")
+        let manifestURL = TestSupport.repoRoot.appendingPathComponent("TypeWhisperPluginSDK/Plugins/XAIPlugin/manifest.json")
         let data = try Data(contentsOf: manifestURL)
         let manifest = try JSONDecoder().decode(PluginManifest.self, from: data)
 
